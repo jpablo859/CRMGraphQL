@@ -1,5 +1,6 @@
 const Usuario = require('../models/Usuario');
 const Producto = require('../models/Producto');
+const Cliente = require('../models/Cliente');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -10,6 +11,27 @@ const resolvers = {
             const usuarioId = await jwt.verify(token, process.env.SECRET_SEED);
 
             return usuarioId;
+        },
+        obtenerProductos: async () => {
+            try {
+                const response = await Producto.find({});
+                return response;
+            } catch (err) {
+                console.log(err)
+            }
+        },
+        obtenerProducto: async (_, {id}) => {
+            try {
+                const response = await Producto.findById(id);
+
+                if (!response) {
+                    throw new Error('No existe el producto');
+                }
+
+                return response;
+            } catch (err) {
+                console.log(err)
+            }
         }
     },
     Mutation: {
@@ -25,8 +47,8 @@ const resolvers = {
                 }
 
                 //HASH CONTRASEÑA
-                const salt = await bcryptjs.genSalt(10);
-                input.password = await bcryptjs.hash(password, salt);
+                const salt = bcryptjs.genSaltSync(10);
+                input.password = bcryptjs.hashSync(password, salt);
 
                 const usuario = new Usuario(input);
                 await usuario.save();
@@ -62,22 +84,79 @@ const resolvers = {
         guardarProducto: async (_, {input}) => {
             try {
                 console.log(input)
-                // const producto = new Producto(input);
+                const producto = new Producto(input);
 
-                // const response = await producto.save();
+                const response = await producto.save();
 
-                // return response;
+                return response;
             } catch (err) {
                 // console.log(err)
             }
+        },
+        actualizarProducto: async (_, {id, input}) => {
+            try {
+                let response = await Producto.findById(id);
+
+                if (!response) {
+                    throw new Error('Producto no encontrado');
+                }
+
+                response = await Producto.findOneAndUpdate({_id: id}, input, {new: true});
+
+                return response;
+            } catch (err) {
+                console.log(err)
+                return err;
+            }
+        },
+        eliminarProducto: async (_, {id}) => {
+            try {
+                const response = await Producto.findByIdAndDelete(id);
+                
+                if (!response) {
+                    throw new Error('Producto no encontrado')
+                }
+
+                return 'Producto eliminado';
+            } catch (err) {
+                console.log(err);
+                return err;
+            }
+        },
+        guardarCliente: async (_, {input}, ctx) => {
+            try {
+                console.log(ctx);
+
+                const cliente = await Cliente.findOne({email: input.email});
+                
+                if (cliente) {
+                    throw new Error('El cliente ya se encuentra registrado');
+                }
+
+                const nuevoCliente = new Cliente(input);
+                nuevoCliente.vendedor = ctx.usuario.id;
+
+                const response = await nuevoCliente.save();
+
+                return response;
+
+            } catch (err) {
+                console.log(err);
+            }
         }
+
     }
 }
 
 const crearToken = (usuario, secret, expiresIn) => {
     const { id, email, nombre, apellido } = usuario;
 
-    return jwt.sign({id}, secret, {expiresIn});
+    return jwt.sign({
+        id,
+        email,
+        nombre,
+        apellido
+    }, secret, {expiresIn});
 }
 
 module.exports = resolvers;
