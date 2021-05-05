@@ -31,6 +31,7 @@ const server = new ApolloServer({
                 }
             } catch (err) {
                 console.log(err)
+                return err;
             }
         }
     } 

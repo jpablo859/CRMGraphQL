@@ -1,6 +1,7 @@
 const Usuario = require('../models/Usuario');
 const Producto = require('../models/Producto');
 const Cliente = require('../models/Cliente');
+const Pedido = require('../models/Pedido');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -29,6 +30,76 @@ const resolvers = {
                 }
 
                 return response;
+            } catch (err) {
+                console.log(err)
+            }
+        },
+        obtenerClientes: async () => {
+            try {
+                const response = await Cliente.find({}).populate('vendedor');
+                return response;
+            } catch (err) {
+                console.log(err)
+            }
+        },
+        obtenerClientesVendedor: async (_, {}, ctx) => {
+            try {
+                const response = await Cliente.find({
+                    vendedor: ctx.usuario.id.toString()
+                });
+                return response;
+            } catch (err) {
+                console.log(err)
+            }
+        },
+        obtenerCliente: async (_, {id}, ctx) => {
+
+            const cliente = await Cliente.findOne({
+                _id: id,
+                vendedor: ctx.usuario.id
+            }).populate('vendedor');
+
+            console.log(cliente)
+
+            if (!cliente) {
+                throw new Error('Cliente no encontrado');
+            }
+            
+            try {
+                return cliente;
+            } catch (err){
+                console.log(err)
+            }
+        },
+        obtenerPedidos: async () => {
+            try {
+                const pedidos = await Pedido.find({});
+                return pedidos;
+            } catch (err) {
+                console.log(err)
+            }
+        },
+        obtenerPedidosVendedor: async (_, {}, ctx) => {
+            try {
+                const pedidos = await Pedido.find({
+                    vendedor: ctx.usuario.id
+                }).populate('cliente vendedor');
+
+                return pedidos;
+            } catch (err) {
+
+            }
+        },
+        obtenerPedido: async (_, {id}, ctx) => {
+            const pedido = await Pedido.findOne({
+                _id: id,
+                vendedor: ctx.usuario.id
+            });
+
+            if (!pedido) throw new Error('No existe el pedido');
+
+            try {
+                return pedido;
             } catch (err) {
                 console.log(err)
             }
@@ -66,20 +137,27 @@ const resolvers = {
             const { email, password } = input;
 
             const validarUsuario = await Usuario.findOne({email});
-
+            
             if (!validarUsuario) {
                 throw new Error('Usuario o contraseña incorrecta');
             }
-
-            const validarPassword = await bcryptjs.compare(password, validarUsuario.password);
-
-            if (!validarPassword) {
+            
+            if (!bcryptjs.compareSync(password, validarUsuario.password)) {
                 throw new Error('Usuario o contraseña incorrecta');
             }
 
-            return {
-                token: crearToken(validarUsuario, process.env.SECRET_SEED, '2h')
+            const { id, nombre, apellido } = validarUsuario;
+
+            try {
+                return {
+                    token: crearToken({
+                        id, email, nombre, apellido
+                    }, process.env.SECRET_SEED, '2h')
+                }
+            } catch (err) {
+                console.log(err)
             }
+
         },
         guardarProducto: async (_, {input}) => {
             try {
@@ -124,14 +202,15 @@ const resolvers = {
             }
         },
         guardarCliente: async (_, {input}, ctx) => {
-            try {
-                console.log(ctx);
+            const cliente = await Cliente.findOne({email: input.email});
 
-                const cliente = await Cliente.findOne({email: input.email});
-                
-                if (cliente) {
-                    throw new Error('El cliente ya se encuentra registrado');
-                }
+            console.log(cliente)
+            
+            if (cliente) {
+                throw new Error('El cliente ya se encuentra registrado');
+            }
+
+            try {
 
                 const nuevoCliente = new Cliente(input);
                 nuevoCliente.vendedor = ctx.usuario.id;
@@ -143,8 +222,64 @@ const resolvers = {
             } catch (err) {
                 console.log(err);
             }
-        }
+        },
+        actualizarCliente: async (_, {id, input}, ctx) => {
+            try {
+                const cliente = await Cliente.findOne({
+                    _id: id,
+                    vendedor: ctx.usuario.id
+                });
 
+                if (!cliente) {
+                    throw new Error('No existe el cliente');
+                }
+
+                const nuevoCliente = await Cliente.findOneAndUpdate(
+                    {_id: id}, input, {new: true}
+                ).populate('vendedor')
+
+                return nuevoCliente;
+            } catch (err) {
+                console.log(err)
+            }
+        },
+        guardarPedido: async (_, {input}, ctx) => {
+            const cliente = await Cliente.findOne({
+                _id: input.cliente,
+                vendedor: ctx.usuario.id
+            });
+
+            if (!cliente) {
+                throw new Error('No existe el cliente');
+            }
+
+            for await (const item of input.pedido) {
+                const producto = await Producto.findById(item.id);
+                
+                if (!producto) throw new Error('No existe el producto');
+
+                if (item.cantidad > producto.stock) {
+                    throw new Error(`Stock insuficiente para el Producto ${producto.nombre}`)
+                } else {
+                    producto.stock-=item.cantidad;
+                    item.precio = producto.precio;
+                    await producto.save();
+                }
+            }
+            try {
+
+                const nuevoPedido = await Pedido(input);
+                nuevoPedido.vendedor = ctx.usuario.id;
+
+                const response = await nuevoPedido.save();
+
+                return response;
+
+            } catch (err) {
+                console.log(err);
+                return "Error interno";
+            }
+        }
     }
 }
 
