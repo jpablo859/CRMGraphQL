@@ -46,7 +46,7 @@ const resolvers = {
             try {
                 const response = await Cliente.find({
                     vendedor: ctx.usuario.id.toString()
-                });
+                }).populate('vendedor');
                 return response;
             } catch (err) {
                 console.log(err)
@@ -102,6 +102,93 @@ const resolvers = {
                 return pedido;
             } catch (err) {
                 console.log(err)
+            }
+        },
+        obtenerPedidosEstado: async (_, {estado}, ctx) => {
+            const pedidos = await Pedido.find({
+                estado,
+                vendedor: ctx.usuario.id
+            }).populate('vendedor: {password: 0} cliente');
+
+            if (!pedidos) throw new Error(`
+                No hay pedidos en estado ${estado}
+            `);
+
+            try {
+                return pedidos;
+            } catch (err) {
+                console.log(err);
+                return "Error interno";
+            }
+        },
+        obtenerMejoresClientes: async () => {
+            try {
+                const clientes = await Pedido.aggregate([
+                    { $match: {estado:'PENDIENTE'}},
+                    { $group: {
+                        _id: "$cliente",
+                        total: { $sum: "$total" }
+                    }},
+                    {
+                        $lookup: {
+                            from: "clientes",
+                            localField: "_id",
+                            foreignField: "_id",
+                            as: "cliente"
+                        }
+                    },
+                    { $sort: { total: -1 } }
+                ]);
+
+                console.log(clientes)
+
+                return clientes;
+            } catch (err) {
+                console.log(err);
+                return "Error interno";
+            }
+
+            
+        },
+        obtenerMejoresVendedores: async () => {
+            try {
+                const vendedores = await Pedido.aggregate([
+                    { $match: {estado:'PENDIENTE'}},
+                    { $group: {
+                        _id: "$vendedor",
+                        total: { $sum: "$total" }
+                    }},
+                    {
+                        $lookup: {
+                            from: "usuarios",
+                            localField: "_id",
+                            foreignField: "_id",
+                            as: "vendedor"
+                        }
+                    },
+                    { $limit: 3 },
+                    { $sort: { total: -1 } }
+                ]);
+
+                console.log(vendedores)
+
+                return vendedores;
+            } catch (err) {
+                console.log(err);
+                return "Error interno";
+            }
+
+            
+        },
+        buscarProducto: async (_, {text}) => {
+            try {
+                const productos = await Producto.find({$text: {
+                    $search: text
+                }});
+                return productos;
+            } catch (err) {
+                console.log(err);
+                return "Error interno";
             }
         }
     },
@@ -277,6 +364,74 @@ const resolvers = {
 
             } catch (err) {
                 console.log(err);
+                return "Error interno";
+            }
+        },
+        actualizarPedido: async (_, {id, input}, ctx) => {
+            const pedido = await Pedido.findOne({
+                _id: id,
+            });
+
+            if (!pedido) {
+                throw new Error('No existe el pedido');
+            }
+
+            const cliente = await Cliente.findOne({
+                _id: input.cliente,
+                vendedor: ctx.usuario.id
+            });
+
+            if (!cliente) {
+                throw new Error('No existe el cliente');
+            }
+
+            if (input.pedido) {
+                for await (const item of input.pedido) {
+                    const producto = await Producto.findById(item.id);
+                    
+                    if (!producto) throw new Error('No existe el producto');
+    
+                    const itemAnterior = pedido.pedido.find(({id}) => id === item.id);
+                    const cantidadAnterior = itemAnterior.cantidad || 0;
+                    
+                    producto.stock+=cantidadAnterior;
+                    
+                    if (item.cantidad > producto.stock) {
+                        throw new Error(`Stock insuficiente para el Producto ${producto.nombre}`)
+                    } else {
+                        producto.stock-=item.cantidad;
+                        item.precio = itemAnterior.precio || 0;
+                        await producto.save();
+                    }
+                }
+            }
+
+
+            try {
+                const response = await Pedido.findOneAndUpdate(
+                    {_id: id},
+                    input,
+                    {new: true}
+                );
+                return response;
+            } catch (err) {
+                console.log(err);
+            }
+
+        },
+        eliminarPedido: async (_, {id}, ctx) => {
+
+            const response = await Pedido.findOneAndDelete({
+                _id: id, 
+                vendedor: ctx.usuario.id
+            });
+
+            if (!response) throw new Error('No existe el pedido');
+
+            try {
+                return "Pedido eliminado";
+            } catch (err) {
+                console.log(err)
                 return "Error interno";
             }
         }

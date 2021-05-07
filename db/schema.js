@@ -12,6 +12,14 @@ const typeDefs = gql`
         creado: String
     }
 
+    type UsuarioConuslta {
+        id: ID
+        nombre: String
+        apellido: String
+        email: String
+        creado: String
+    }
+
     type Token {
         token: String
     }
@@ -32,7 +40,7 @@ const typeDefs = gql`
         email: String
         telefono: String
         creado: String
-        vendedor: Usuario
+        vendedor: UsuarioConuslta
     }
 
     type PedidoGrupo {
@@ -46,9 +54,19 @@ const typeDefs = gql`
         pedido: [PedidoGrupo]
         total: Float
         cliente: Cliente
-        vendedor: Usuario
+        vendedor: UsuarioConuslta
         creado: String
         estado: EstadoPedido
+    }
+
+    type TopCliente {
+        total: Float
+        cliente: [Cliente]
+    }
+
+    type TopVendedor {
+        total: Float
+        vendedor: [UsuarioConuslta]
     }
 
     input UsuarioInput {
@@ -85,8 +103,8 @@ const typeDefs = gql`
 
     input PedidoInput {
         pedido: [PedidoProductoInput]
-        total: Float!
-        cliente: ID!
+        total: Float
+        cliente: ID
         estado: EstadoPedido
     }
 
@@ -108,6 +126,12 @@ const typeDefs = gql`
         obtenerPedidos: [Pedido]
         obtenerPedidosVendedor: [Pedido]
         obtenerPedido(id: ID!): Pedido
+        obtenerPedidosEstado(estado: String!): [Pedido]
+
+        #Busquedas Avanzadas
+        obtenerMejoresClientes: [TopCliente]
+        obtenerMejoresVendedores: [TopVendedor]
+        buscarProducto(text: String!): [Producto]
     }
 
     type Mutation {
@@ -126,6 +150,8 @@ const typeDefs = gql`
 
         #Pedidos
         guardarPedido(input: PedidoInput): Pedido
+        actualizarPedido(id: ID!, input: PedidoInput): Pedido
+        eliminarPedido(id: ID!): String
     }
 
 `;
