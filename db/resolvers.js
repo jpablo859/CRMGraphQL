@@ -8,10 +8,8 @@ const jwt = require('jsonwebtoken');
 //RESOLVERS
 const resolvers = {
     Query: {
-        obtenerUsuario: async (_, {token}) => {
-            const usuarioId = await jwt.verify(token, process.env.SECRET_SEED);
-
-            return usuarioId;
+        obtenerUsuario: async (_, {}, ctx) => {
+            return ctx.usuario;
         },
         obtenerProductos: async () => {
             try {
@@ -108,7 +106,7 @@ const resolvers = {
             const pedidos = await Pedido.find({
                 estado,
                 vendedor: ctx.usuario.id
-            }).populate('vendedor: {password: 0} cliente');
+            }).populate('vendedor cliente');
 
             if (!pedidos) throw new Error(`
                 No hay pedidos en estado ${estado}
@@ -124,7 +122,7 @@ const resolvers = {
         obtenerMejoresClientes: async () => {
             try {
                 const clientes = await Pedido.aggregate([
-                    { $match: {estado:'PENDIENTE'}},
+                    { $match: {estado:'COMPLETADO'}},
                     { $group: {
                         _id: "$cliente",
                         total: { $sum: "$total" }
@@ -153,7 +151,7 @@ const resolvers = {
         obtenerMejoresVendedores: async () => {
             try {
                 const vendedores = await Pedido.aggregate([
-                    { $match: {estado:'PENDIENTE'}},
+                    { $match: {estado:'COMPLETADO'}},
                     { $group: {
                         _id: "$vendedor",
                         total: { $sum: "$total" }
@@ -197,12 +195,13 @@ const resolvers = {
             
             const { email, password} = input;
 
+            const validarUsuario = await Usuario.findOne({email});
+
+            if (validarUsuario) {
+                throw new Error('El usuario ya se encuentra registrado');
+            }
+            
             try {
-                const validarUsuario = await Usuario.findOne({email});
-    
-                if (validarUsuario) {
-                    throw new Error('El usuario ya se encuentra registrado');
-                }
 
                 //HASH CONTRASEÑA
                 const salt = bcryptjs.genSaltSync(10);
@@ -268,6 +267,8 @@ const resolvers = {
 
                 response = await Producto.findOneAndUpdate({_id: id}, input, {new: true});
 
+                console.log(response)
+
                 return response;
             } catch (err) {
                 console.log(err)
@@ -311,15 +312,18 @@ const resolvers = {
             }
         },
         actualizarCliente: async (_, {id, input}, ctx) => {
-            try {
-                const cliente = await Cliente.findOne({
-                    _id: id,
-                    vendedor: ctx.usuario.id
-                });
 
-                if (!cliente) {
-                    throw new Error('No existe el cliente');
-                }
+            console.log(input);
+            const cliente = await Cliente.findOne({
+                _id: id,
+                vendedor: ctx.usuario.id
+            });
+
+            if (!cliente) {
+                throw new Error('No existe el cliente');
+            }
+
+            try {
 
                 const nuevoCliente = await Cliente.findOneAndUpdate(
                     {_id: id}, input, {new: true}
@@ -328,6 +332,7 @@ const resolvers = {
                 return nuevoCliente;
             } catch (err) {
                 console.log(err)
+                return "Error interno";
             }
         },
         guardarPedido: async (_, {input}, ctx) => {
@@ -432,6 +437,21 @@ const resolvers = {
                 return "Pedido eliminado";
             } catch (err) {
                 console.log(err)
+                return "Error interno";
+            }
+        },
+        eliminarCliente: async (_, {id}, ctx) => {
+            const response = await Cliente.findOneAndDelete({
+                _id: id,
+                vendedor: ctx.usuario.id
+            });
+
+            if (!response) throw new Error('No existe el cliente');
+
+            try {
+                return "Cliente eliminado";
+            } catch (err) {
+                console.log(err);
                 return "Error interno";
             }
         }

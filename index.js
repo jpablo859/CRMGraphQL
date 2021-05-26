@@ -16,6 +16,8 @@ const server = new ApolloServer({
     typeDefs,
     resolvers,
     context: ({req}) => {
+
+        
         const token = req.headers['authorization'] || null;
 
         if (token) {
@@ -30,7 +32,6 @@ const server = new ApolloServer({
                     usuario
                 }
             } catch (err) {
-                console.log(err)
                 return err;
             }
         }

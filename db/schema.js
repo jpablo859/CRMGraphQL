@@ -115,7 +115,7 @@ const typeDefs = gql`
     }
 
     type Query {
-        obtenerUsuario(token: String!): Usuario
+        obtenerUsuario: Usuario
         obtenerProductos: [Producto]
         obtenerProducto(id: ID!): Producto
         obtenerClientes: [Cliente]
@@ -147,6 +147,7 @@ const typeDefs = gql`
         #Clientes
         guardarCliente(input: ClienteInput): Cliente
         actualizarCliente(id: ID!, input: ClienteInput): Cliente
+        eliminarCliente(id: ID!): String
 
         #Pedidos
         guardarPedido(input: PedidoInput): Pedido
